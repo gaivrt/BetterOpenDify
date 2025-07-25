@@ -1,6 +1,5 @@
 import json
 import logging
-import asyncio
 from flask import Flask, request, Response, stream_with_context
 import httpx
 import time
@@ -28,20 +27,66 @@ def parse_model_config():
     """
     try:
         config_str = os.getenv('MODEL_CONFIG', '{}')
+        if not config_str.strip():
+            logger.warning("MODEL_CONFIG is empty, no models will be available")
+            return {}
+            
         # 尝试作为Python字典解析
         try:
-            return ast.literal_eval(config_str)
+            result = ast.literal_eval(config_str)
+            if not isinstance(result, dict):
+                logger.error("MODEL_CONFIG must be a dictionary")
+                return {}
+            return result
         except (SyntaxError, ValueError) as e:
             logger.error(f"Failed to parse MODEL_CONFIG as Python dict: {e}")
             try:
                 # 尝试作为JSON解析
-                return json.loads(config_str)
+                result = json.loads(config_str)
+                if not isinstance(result, dict):
+                    logger.error("MODEL_CONFIG must be a dictionary")
+                    return {}
+                return result
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse MODEL_CONFIG as JSON: {e}")
                 return {}
     except Exception as e:
         logger.error(f"Error parsing MODEL_CONFIG: {e}")
         return {}
+
+def validate_startup_config():
+    """验证启动配置"""
+    issues = []
+    
+    # 检查必需的环境变量
+    dify_api_base = os.getenv("DIFY_API_BASE", "")
+    if not dify_api_base.strip():
+        issues.append("DIFY_API_BASE is not set or empty")
+    elif not (dify_api_base.startswith("http://") or dify_api_base.startswith("https://")):
+        issues.append(f"DIFY_API_BASE must be a valid URL, got: {dify_api_base}")
+    
+    # 检查模型配置
+    if not MODEL_TO_API_KEY:
+        issues.append("No valid models configured in MODEL_CONFIG")
+    else:
+        for model_name, api_key in MODEL_TO_API_KEY.items():
+            if not api_key or not api_key.strip():
+                issues.append(f"Empty API key for model: {model_name}")
+            elif not isinstance(api_key, str):
+                issues.append(f"API key must be string for model: {model_name}")
+    
+    # 报告问题
+    if issues:
+        logger.error("Configuration validation failed:")
+        for issue in issues:
+            logger.error(f"  - {issue}")
+        logger.error("Please check your .env file and fix these issues")
+        return False
+    
+    logger.info("✅ Configuration validation passed")
+    logger.info(f"✅ Loaded {len(MODEL_TO_API_KEY)} model(s): {', '.join(MODEL_TO_API_KEY.keys())}")
+    logger.info(f"✅ Dify API base: {dify_api_base}")
+    return True
 
 # 从环境变量获取配置
 MODEL_TO_API_KEY = parse_model_config()
@@ -62,6 +107,32 @@ app = Flask(__name__)
 
 # 从环境变量获取API基础URL
 DIFY_API_BASE = os.getenv("DIFY_API_BASE", "https://mify-be.pt.xiaomi.com/api/v1")
+
+# 全局HTTP客户端配置
+HTTP_CLIENT_CONFIG = {
+    "timeout": 30.0,
+    "limits": httpx.Limits(max_keepalive_connections=20, max_connections=100),
+    "follow_redirects": True
+}
+
+# 全局HTTP客户端实例（延迟初始化）
+_http_client = None
+
+def get_http_client():
+    """获取或创建全局HTTP客户端"""
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.Client(**HTTP_CLIENT_CONFIG)
+        logger.info("✅ HTTP client initialized with connection pooling")
+    return _http_client
+
+def cleanup_http_client():
+    """清理HTTP客户端资源"""
+    global _http_client
+    if _http_client is not None:
+        _http_client.close()
+        _http_client = None
+        logger.info("✅ HTTP client resources cleaned up")
 
 def get_api_key(model_name):
     """根据模型名称获取对应的API密钥"""
@@ -182,7 +253,7 @@ def chat_completions():
 
         if stream:
             def generate():
-                client = httpx.Client(timeout=None)
+                client = get_http_client()
                 
                 def flush_chunk(chunk_data):
                     """Helper function to flush chunks immediately"""
@@ -224,6 +295,9 @@ def chat_completions():
                 output_buffer = []
                 
                 try:
+                    # 移除预连接检查，直接进行流式请求
+                    # 预连接检查可能过于严格，影响正常流式响应
+                    
                     with client.stream(
                         'POST',
                         dify_endpoint,
@@ -302,15 +376,28 @@ def chat_completions():
                                             yield flush_chunk("data: [DONE]\n\n")
                                         
                                     except json.JSONDecodeError as e:
-                                        logger.error(f"JSON decode error: {str(e)}")
+                                        logger.warning(f"JSON decode error in streaming response: {str(e)}, line: {json_str[:100]}...")
                                         continue
                                         
                             except Exception as e:
                                 logger.error(f"Error processing chunk: {str(e)}")
                                 continue
 
+                except httpx.ConnectTimeout as e:
+                    logger.error(f"Stream connection timeout: {e}")
+                    yield flush_chunk(f"data: {{\"error\": \"Connection timeout: {str(e)}\"}}\n\n")
+                    yield flush_chunk("data: [DONE]\n\n")
+                except httpx.RequestError as e:
+                    logger.error(f"Stream request error: {e}")
+                    yield flush_chunk(f"data: {{\"error\": \"Request error: {str(e)}\"}}\n\n")
+                    yield flush_chunk("data: [DONE]\n\n")
+                except Exception as e:
+                    logger.error(f"Unexpected stream error: {e}")
+                    yield flush_chunk(f"data: {{\"error\": \"Internal error: {str(e)}\"}}\n\n")
+                    yield flush_chunk("data: [DONE]\n\n")
                 finally:
-                    client.close()
+                    # 使用全局客户端，不需要手动关闭
+                    pass
 
             return Response(
                 stream_with_context(generate()),
@@ -325,42 +412,61 @@ def chat_completions():
                 direct_passthrough=True
             )
         else:
-            async def sync_response():
-                try:
-                    async with httpx.AsyncClient() as client:
-                        response = await client.post(
-                            dify_endpoint,
-                            json=dify_request,
-                            headers=headers
-                        )
-                        
-                        if response.status_code != 200:
-                            error_msg = f"Dify API error: {response.text}"
-                            logger.error(f"Request failed: {error_msg}")
-                            return {
-                                "error": {
-                                    "message": error_msg,
-                                    "type": "api_error",
-                                    "code": response.status_code
-                                }
-                            }, response.status_code
-
-                        dify_response = response.json()
-                        logger.info(f"Received response from Dify: {json.dumps(dify_response, ensure_ascii=False)}")
-                        openai_response = transform_dify_to_openai(dify_response, model=model)
-                        return openai_response
-                except httpx.RequestError as e:
-                    error_msg = f"Failed to connect to Dify: {str(e)}"
-                    logger.error(error_msg)
+            # 使用同步客户端处理非流式响应
+            try:
+                client = get_http_client()
+                response = client.post(
+                    dify_endpoint,
+                    json=dify_request,
+                    headers=headers
+                )
+                
+                if response.status_code != 200:
+                    error_msg = f"Dify API error: {response.text}"
+                    logger.error(f"Request failed: {error_msg}")
                     return {
                         "error": {
                             "message": error_msg,
                             "type": "api_error",
-                            "code": "connection_error"
+                            "code": response.status_code
                         }
-                    }, 503
+                    }, response.status_code
 
-            return asyncio.run(sync_response())
+                dify_response = response.json()
+                logger.info(f"Received response from Dify: {json.dumps(dify_response, ensure_ascii=False)}")
+                openai_response = transform_dify_to_openai(dify_response, model=model)
+                return openai_response
+                
+            except httpx.TimeoutException as e:
+                error_msg = f"Request timeout: {str(e)}"
+                logger.error(f"Timeout error for model {model}: {error_msg}")
+                return {
+                    "error": {
+                        "message": error_msg,
+                        "type": "timeout_error",
+                        "code": "request_timeout"
+                    }
+                }, 408
+            except httpx.ConnectError as e:
+                error_msg = f"Failed to connect to Dify API: {str(e)}"
+                logger.error(f"Connection error for model {model}: {error_msg}")
+                return {
+                    "error": {
+                        "message": error_msg,
+                        "type": "connection_error", 
+                        "code": "connection_failed"
+                    }
+                }, 503
+            except httpx.RequestError as e:
+                error_msg = f"Request failed: {str(e)}"
+                logger.error(f"Request error for model {model}: {error_msg}")
+                return {
+                    "error": {
+                        "message": error_msg,
+                        "type": "api_error",
+                        "code": "request_failed"
+                    }
+                }, 503
 
     except Exception as e:
         logger.exception("Unexpected error occurred")
@@ -389,7 +495,18 @@ def list_models():
     return response
 
 if __name__ == '__main__':
+    # 验证配置
+    if not validate_startup_config():
+        logger.error("❌ Startup aborted due to configuration errors")
+        exit(1)
+    
     host = os.getenv("SERVER_HOST", "127.0.0.1")
     port = int(os.getenv("SERVER_PORT", 5000))
-    logger.info(f"Starting server on http://{host}:{port}")
-    app.run(debug=True, host=host, port=port)
+    logger.info(f"🚀 Starting OpenDify server on http://{host}:{port}")
+    
+    try:
+        app.run(debug=True, host=host, port=port)
+    except KeyboardInterrupt:
+        logger.info("Shutting down server...")
+    finally:
+        cleanup_http_client()

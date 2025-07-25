@@ -75,7 +75,7 @@ MODEL_CONFIG={"translator":"app-xxxxxx","code-assistant":"app-yyyyyy"}
 ### 运行服务
 
 ```bash
-python openai_to_dify.py
+python main.py
 ```
 
 服务将在 `http://127.0.0.1:5000` 启动
