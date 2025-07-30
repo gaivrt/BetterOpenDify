@@ -10,7 +10,7 @@ cp .env.example .env
 
 ### 2. 构建镜像
 ```bash
-./build.sh
+./scripts/build.sh
 # 或者手动构建
 docker build -t opendify:latest .
 ```
@@ -20,13 +20,13 @@ docker build -t opendify:latest .
 #### 方式1: 使用部署脚本（推荐）
 ```bash
 # 交互式安全配置
-./deploy.sh setup
+./scripts/deploy.sh setup
 
 # 一键部署
-./deploy.sh deploy
+./scripts/deploy.sh deploy
 
 # 查看状态
-./deploy.sh status
+./scripts/deploy.sh status
 ```
 
 #### 方式2: 直接运行
@@ -63,10 +63,10 @@ docker-compose --profile with-nginx up -d
 
 #### 使用部署脚本（最佳实践）
 
-1. **安全配置**: 使用 `./deploy.sh setup` 交互式创建配置
-2. **自动化部署**: 使用 `./deploy.sh deploy` 一键部署
-3. **健康监控**: 使用 `./deploy.sh status` 监控服务状态
-4. **简化更新**: 使用 `./deploy.sh update` 更新服务
+1. **安全配置**: 使用 `./scripts/deploy.sh setup` 交互式创建配置
+2. **自动化部署**: 使用 `./scripts/deploy.sh deploy` 一键部署
+3. **健康监控**: 使用 `./scripts/deploy.sh status` 监控服务状态
+4. **简化更新**: 使用 `./scripts/deploy.sh update` 更新服务
 
 #### 传统部署方式
 
@@ -85,7 +85,7 @@ docker-compose --profile with-nginx up -d
 ### 健康检查
 ```bash
 # 检查服务状态（使用部署脚本）
-./deploy.sh status
+./scripts/deploy.sh status
 
 # 手动检查 API 可用性
 curl http://localhost:5000/v1/models
