@@ -7,7 +7,8 @@ import requests
 import json
 
 def test_service():
-    base_url = "http://127.0.0.1:5000/v1"
+    import sys
+    base_url = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:5000/v1"
     
     print("🔍 测试模型列表...")
     try:

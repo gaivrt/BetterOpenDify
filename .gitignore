@@ -61,4 +61,8 @@ coverage.xml
 
 # Project specific
 *.pid
-*.sock 
+*.sock
+
+# Data directory (persistent mappings)
+data/
+!data/.gitkeep 
