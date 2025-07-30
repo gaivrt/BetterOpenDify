@@ -6,6 +6,8 @@ import time
 from dotenv import load_dotenv
 import os
 import ast
+from threading import Lock
+from typing import Dict, Optional
 
 # 配置日志
 logging.basicConfig(
@@ -19,6 +21,122 @@ logging.getLogger("httpx").setLevel(logging.DEBUG)
 
 # 加载环境变量
 load_dotenv()
+
+class ConversationMapper:
+    """管理 Open WebUI chat_id 到 Dify conversation_id 的映射关系"""
+    
+    def __init__(self, storage_file="data/conversation_mappings.json"):
+        # 确保数据目录存在
+        os.makedirs(os.path.dirname(storage_file), exist_ok=True)
+        self.storage_file = storage_file
+        self._mapping: Dict[str, dict] = {}  # 改为dict存储更多信息
+        self._lock = Lock()
+        self._load_mappings()
+        logger.info("✅ ConversationMapper initialized")
+    
+    def _load_mappings(self) -> None:
+        """从文件加载映射关系"""
+        try:
+            if os.path.exists(self.storage_file):
+                with open(self.storage_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self._mapping = data
+                    logger.info(f"📂 Loaded {len(self._mapping)} conversation mappings from {self.storage_file}")
+            else:
+                logger.info(f"📂 No existing mappings file found, starting fresh")
+        except Exception as e:
+            logger.error(f"❌ Failed to load mappings from {self.storage_file}: {e}")
+            self._mapping = {}
+    
+    def _save_mappings(self) -> None:
+        """保存映射关系到文件"""
+        try:
+            with open(self.storage_file, 'w', encoding='utf-8') as f:
+                json.dump(self._mapping, f, ensure_ascii=False, indent=2)
+            logger.debug(f"💾 Saved {len(self._mapping)} mappings to {self.storage_file}")
+        except Exception as e:
+            logger.error(f"❌ Failed to save mappings to {self.storage_file}: {e}")
+    
+    def get_dify_conversation_id(self, webui_chat_id: str) -> Optional[str]:
+        """根据 Open WebUI chat_id 获取对应的 Dify conversation_id"""
+        with self._lock:
+            mapping_info = self._mapping.get(webui_chat_id)
+            return mapping_info.get('dify_conversation_id') if mapping_info else None
+    
+    def set_mapping(self, webui_chat_id: str, dify_conversation_id: str) -> None:
+        """设置映射关系"""
+        with self._lock:
+            self._mapping[webui_chat_id] = {
+                'dify_conversation_id': dify_conversation_id,
+                'created_at': int(time.time()),
+                'last_used': int(time.time())
+            }
+            self._save_mappings()  # 立即持久化
+            logger.info(f"🔗 Mapped WebUI chat_id {webui_chat_id[:8]}... to Dify conversation_id {dify_conversation_id[:8]}...")
+    
+    def has_mapping(self, webui_chat_id: str) -> bool:
+        """检查是否存在映射关系"""
+        with self._lock:
+            return webui_chat_id in self._mapping
+    
+    def remove_mapping(self, webui_chat_id: str) -> bool:
+        """删除映射关系"""
+        with self._lock:
+            if webui_chat_id in self._mapping:
+                del self._mapping[webui_chat_id]
+                self._save_mappings()  # 立即持久化
+                logger.info(f"🗑️  Removed mapping for WebUI chat_id {webui_chat_id[:8]}...")
+                return True
+            return False
+    
+    def get_mapping_count(self) -> int:
+        """获取当前映射数量"""
+        with self._lock:
+            return len(self._mapping)
+    
+    def update_last_used(self, webui_chat_id: str) -> None:
+        """更新映射的最后使用时间"""
+        with self._lock:
+            if webui_chat_id in self._mapping:
+                self._mapping[webui_chat_id]['last_used'] = int(time.time())
+                self._save_mappings()
+    
+    def cleanup_old_mappings(self, max_age_days: int = 30) -> int:
+        """清理超过指定天数的映射"""
+        cutoff_time = int(time.time()) - (max_age_days * 24 * 60 * 60)
+        removed_count = 0
+        
+        with self._lock:
+            keys_to_remove = []
+            for chat_id, mapping_info in self._mapping.items():
+                if mapping_info.get('last_used', 0) < cutoff_time:
+                    keys_to_remove.append(chat_id)
+            
+            for key in keys_to_remove:
+                del self._mapping[key]
+                removed_count += 1
+            
+            if removed_count > 0:
+                self._save_mappings()
+                logger.info(f"🧹 Cleaned up {removed_count} old mappings (older than {max_age_days} days)")
+        
+        return removed_count
+    
+    def get_mapping_stats(self) -> dict:
+        """获取映射统计信息"""
+        with self._lock:
+            if not self._mapping:
+                return {"total": 0, "oldest": None, "newest": None}
+            
+            created_times = [info.get('created_at', 0) for info in self._mapping.values()]
+            return {
+                "total": len(self._mapping),
+                "oldest": min(created_times) if created_times else None,
+                "newest": max(created_times) if created_times else None
+            }
+
+# 全局会话映射器实例
+conversation_mapper = ConversationMapper()
 
 def parse_model_config():
     """
@@ -141,23 +259,80 @@ def get_api_key(model_name):
         logger.warning(f"No API key found for model: {model_name}")
     return api_key
 
-def transform_openai_to_dify(openai_request, endpoint):
+def extract_webui_chat_id() -> Optional[str]:
+    """从请求中提取 Open WebUI 的 chat_id"""
+    # 调试：打印所有请求头
+    logger.debug(f"🔍 All headers: {dict(request.headers)}")
+    
+    # 调试：逐个打印每个头部的名称和值
+    logger.debug("🔍 Raw headers inspection:")
+    for header_name, header_value in request.headers:
+        logger.debug(f"🔍   '{header_name}' = '{header_value}'")
+        # 检查是否包含chat-id相关字符串
+        if 'chat' in header_name.lower():
+            logger.debug(f"🔍   ^^^ This header contains 'chat'!")
+    
+    # 方法1: 从 HTTP Header 提取 (支持多种大小写形式)
+    possible_headers = ['X-OpenWebUI-Chat-Id', 'x-openwebui-chat-id', 'X-Openwebui-Chat-Id']
+    chat_id = None
+    
+    for header_name in possible_headers:
+        chat_id = request.headers.get(header_name)
+        if chat_id:
+            logger.debug(f"🔍 Found chat_id in header '{header_name}': {chat_id[:8]}...")
+            return chat_id
+    
+    # 方法1.5: 直接遍历所有头部查找包含 chat-id 的
+    for header_name, header_value in request.headers:
+        if 'chat-id' in header_name.lower():
+            logger.debug(f"🔍 Found chat_id in header '{header_name}': {header_value[:8]}...")
+            return header_value
+    
+    # 方法2: 从请求体的 metadata 提取
+    try:
+        request_json = request.get_json() or {}
+        metadata = request_json.get('metadata', {})
+        chat_id = metadata.get('chat_id')
+        if chat_id:
+            logger.debug(f"🔍 Found chat_id in metadata: {chat_id[:8]}...")
+            return chat_id
+    except Exception as e:
+        logger.debug(f"Failed to extract chat_id from metadata: {e}")
+    
+    # 方法3: 检查User-Agent，如果是OpenWebUI的后端，可能需要其他方式获取chat_id
+    user_agent = request.headers.get('User-Agent', '')
+    if 'aiohttp' in user_agent:
+        logger.debug("🔍 Request from aiohttp (likely Open WebUI backend) but no chat_id header found")
+        # 可以添加更多提取逻辑，比如从Authorization header或其他地方
+    
+    logger.debug("🔍 No chat_id found in request")
+    return None
+
+def transform_openai_to_dify(openai_request, endpoint, webui_chat_id=None):
     """将OpenAI格式的请求转换为Dify格式"""
     
     if endpoint == "/chat/completions":
         messages = openai_request.get("messages", [])
         stream = openai_request.get("stream", False)
         
+        # 处理 conversation_id 映射
+        dify_conversation_id = None
+        if webui_chat_id:
+            dify_conversation_id = conversation_mapper.get_dify_conversation_id(webui_chat_id)
+            if dify_conversation_id:
+                conversation_mapper.update_last_used(webui_chat_id)  # 更新使用时间
+            logger.info(f"🔄 WebUI chat_id: {webui_chat_id[:8]}... -> Dify conversation_id: {dify_conversation_id[:8] if dify_conversation_id else 'None'}...")
+        
         dify_request = {
             "inputs": {},
             "query": messages[-1]["content"] if messages else "",
             "response_mode": "streaming" if stream else "blocking",
-            "conversation_id": openai_request.get("conversation_id", None),
+            "conversation_id": dify_conversation_id,
             "user": openai_request.get("user", "default_user")
         }
 
-        # 添加历史消息
-        if len(messages) > 1:
+        # 添加历史消息（只在没有 conversation_id 时使用，避免重复）
+        if not dify_conversation_id and len(messages) > 1:
             history = []
             for msg in messages[:-1]:  # 除了最后一条消息
                 history.append({
@@ -165,6 +340,7 @@ def transform_openai_to_dify(openai_request, endpoint):
                     "content": msg["content"]
                 })
             dify_request["conversation_history"] = history
+            logger.debug(f"📝 Added {len(history)} history messages (no conversation_id)")
 
         return dify_request
     
@@ -208,11 +384,29 @@ def create_openai_stream_response(content, message_id, model="claude-3-5-sonnet-
         }]
     }
 
+def update_conversation_mapping(webui_chat_id: str, dify_response: dict) -> None:
+    """从 Dify 响应中提取 conversation_id 并更新映射"""
+    if not webui_chat_id:
+        return
+    
+    # 提取 conversation_id
+    dify_conversation_id = dify_response.get("conversation_id")
+    if dify_conversation_id and not conversation_mapper.has_mapping(webui_chat_id):
+        conversation_mapper.set_mapping(webui_chat_id, dify_conversation_id)
+        logger.info(f"🆕 New conversation mapping established")
+    elif dify_conversation_id:
+        logger.debug(f"✅ Conversation mapping already exists")
+
 @app.route('/v1/chat/completions', methods=['POST'])
 def chat_completions():
     try:
         openai_request = request.get_json()
         logger.info(f"Received request: {json.dumps(openai_request, ensure_ascii=False)}")
+        
+        # 提取 Open WebUI chat_id
+        webui_chat_id = extract_webui_chat_id()
+        if webui_chat_id:
+            logger.info(f"🔗 Processing request for WebUI chat_id: {webui_chat_id[:8]}...")
         
         model = openai_request.get("model", "claude-3-5-sonnet-v2")
         logger.info(f"Using model: {model}")
@@ -230,7 +424,7 @@ def chat_completions():
                 }
             }, 404
             
-        dify_request = transform_openai_to_dify(openai_request, "/chat/completions")
+        dify_request = transform_openai_to_dify(openai_request, "/chat/completions", webui_chat_id)
         logger.info(f"Transformed request: {json.dumps(dify_request, ensure_ascii=False)}")
         
         if not dify_request:
@@ -338,6 +532,8 @@ def chat_completions():
                                             message_id = dify_chunk.get("message_id", "")
                                             if not generate.message_id:
                                                 generate.message_id = message_id
+                                                # 在流式响应的第一个消息中更新映射
+                                                update_conversation_mapping(webui_chat_id, dify_chunk)
                                             
                                             # 将当前批次的字符添加到输出缓冲区
                                             for char in current_answer:
@@ -434,6 +630,10 @@ def chat_completions():
 
                 dify_response = response.json()
                 logger.info(f"Received response from Dify: {json.dumps(dify_response, ensure_ascii=False)}")
+                
+                # 更新会话映射
+                update_conversation_mapping(webui_chat_id, dify_response)
+                
                 openai_response = transform_dify_to_openai(dify_response, model=model)
                 return openai_response
                 
@@ -493,6 +693,28 @@ def list_models():
     }
     logger.info(f"Available models: {json.dumps(response, ensure_ascii=False)}")
     return response
+
+@app.route('/v1/conversation/mappings', methods=['GET'])
+def get_conversation_mappings():
+    """获取当前的会话映射状态（调试用）"""
+    stats = conversation_mapper.get_mapping_stats()
+    return {
+        "mapping_count": stats["total"],
+        "oldest_mapping": stats["oldest"],
+        "newest_mapping": stats["newest"],
+        "timestamp": int(time.time())
+    }
+
+@app.route('/v1/conversation/cleanup', methods=['POST'])
+def cleanup_old_conversations():
+    """清理旧的会话映射"""
+    max_age_days = request.json.get('max_age_days', 30) if request.is_json else 30
+    removed_count = conversation_mapper.cleanup_old_mappings(max_age_days)
+    return {
+        "removed_count": removed_count,
+        "max_age_days": max_age_days,
+        "timestamp": int(time.time())
+    }
 
 if __name__ == '__main__':
     # 验证配置
