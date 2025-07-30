@@ -195,6 +195,13 @@ echo $MODEL_CONFIG | python -m json.tool
 
 # 测试服务器连通性
 curl http://localhost:5000/v1/models
+
+# 测试用户ID提取功能
+curl -H "x-openwebui-user-id: test-user-123" \
+     -H "x-openwebui-chat-id: test-chat-456" \
+     -H "Content-Type: application/json" \
+     -d '{"model":"test-model","messages":[{"role":"user","content":"test"}]}' \
+     http://localhost:5000/v1/chat/completions
 ```
 
 ## Docker 配置

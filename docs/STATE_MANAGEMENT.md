@@ -47,7 +47,8 @@ x-openwebui-user-id: 85134a10-4168-4742-8924-88925c1761d2
   "model": "claude-3-5-sonnet",
   "messages": [...],
   "metadata": {
-    "chat_id": "92dd6958-0876-4f21-8fe9-f8b7ad52549c"
+    "chat_id": "92dd6958-0876-4f21-8fe9-f8b7ad52549c",
+    "user_id": "85134a10-4168-4742-8924-88925c1761d2"
   }
 }
 ```
@@ -78,18 +79,34 @@ User-Agent: aiohttp/3.8.0
 
 ### 2. 用户标识处理
 
-#### 用户ID转换
+#### 多源用户ID提取
+OpenDify 实现了智能的用户ID提取机制，支持多种来源：
+
+**提取优先级**：
+1. **OpenAI 请求体 `user` 字段** (最高优先级)
+2. **Open WebUI 头部 `x-openwebui-user-id`**
+3. **默认值 `"default_user"`** (最低优先级)
+
+**实现代码**：
 ```python
-"user": openai_request.get("user", "default_user")
+user_id = (
+    openai_request.get("user") or      # 1. OpenAI请求体中的user字段
+    extract_webui_user_id() or         # 2. OpenWebUI头部中的user-id  
+    "default_user"                     # 3. 默认值
+)
 ```
 
-**转换逻辑**：
-- 存在 `user` 字段 → 直接使用
-- 不存在 → 使用 `"default_user"`
+#### extract_webui_user_id() 函数
+支持多种 Open WebUI 用户ID头部格式：
+- `X-OpenWebUI-User-Id` (标准格式)
+- `x-openwebui-user-id` (小写格式) ✅
+- `X-Openwebui-User-Id` (混合格式)
+- 以及模糊匹配包含 `user-id` 的头部
 
 #### 用户级会话管理
-- Dify API 使用 `user` 字段进行用户级会话隔离
+- Dify API 使用提取的真实 `user` 字段进行用户级会话隔离
 - 确保不同用户的对话不会相互干扰
+- 在 Dify 平台显示真实的用户ID而非统一的 "default_user"
 
 ### 3. 状态转换策略
 
@@ -245,11 +262,22 @@ logging.basicConfig(level=logging.DEBUG)
 ```
 
 ### 关键日志标识
+
+**会话管理相关**：
 ```
 🔍 Found chat_id in header: x-openwebui-chat-id
 🔄 WebUI chat_id: 92dd6958... -> Dify conversation_id: conv_xxx...
 🆕 New conversation mapping established
 ✅ Conversation mapping already exists
+```
+
+**用户ID管理相关**：
+```
+🔍 Searching for user_id in headers
+🔍 Found user-related header: 'x-openwebui-user-id' = '85134a10...'
+🔍 Found user_id in header 'x-openwebui-user-id': 85134a10...
+👤 User ID resolved: 85134a10...
+👤 Processing request for WebUI user_id: 85134a10...
 ```
 
 ### 监控端点
@@ -270,19 +298,27 @@ POST /v1/conversation/cleanup     # 清理过期映射
 # 查看映射文件
 cat data/conversation_mappings.json | jq .
 
-# 测试头部检测
+# 测试会话ID检测
 curl -H "x-openwebui-chat-id: test-id" http://localhost:5000/v1/chat/completions
 
+# 测试用户ID检测
+curl -H "x-openwebui-user-id: test-user" http://localhost:5000/v1/chat/completions
+
+# 测试完整头部
+curl -H "x-openwebui-chat-id: test-chat" \
+     -H "x-openwebui-user-id: test-user" \
+     http://localhost:5000/v1/chat/completions
+
 # 查看详细日志
-python main.py 2>&1 | grep "🔍\|🔄\|🆕"
+python main.py 2>&1 | grep "🔍\|🔄\|🆕\|👤"
 ```
 
 ## 最佳实践
 
 ### 客户端配置
-1. **Open WebUI**: 确保发送 `x-openwebui-chat-id` 头部
-2. **标准客户端**: 使用完整 `messages` 数组
-3. **自定义客户端**: 可选择性发送 `user` 字段
+1. **Open WebUI**: 确保发送 `x-openwebui-chat-id` 和 `x-openwebui-user-id` 头部
+2. **标准客户端**: 使用完整 `messages` 数组，可选择性包含 `user` 字段
+3. **自定义客户端**: 支持多种用户标识方式（头部、请求体、metadata）
 
 ### 服务端配置
 1. **定期清理**: 配置映射清理策略
@@ -290,18 +326,22 @@ python main.py 2>&1 | grep "🔍\|🔄\|🆕"
 3. **日志管理**: 适当的日志级别和轮转
 
 ### 安全考虑
-1. **会话隔离**: 依赖 `user` 字段进行用户隔离
-2. **数据保护**: 映射文件包含会话标识信息
-3. **权限控制**: 确保映射文件访问权限正确
+1. **用户隔离**: 智能提取的真实用户ID确保用户级数据隔离
+2. **会话隔离**: 会话映射防止跨用户会话泄露
+3. **数据保护**: 映射文件包含敏感的会话和用户标识信息
+4. **权限控制**: 确保映射文件访问权限正确
+5. **日志脱敏**: 用户ID在日志中进行部分脱敏显示
 
 ## 总结
 
 OpenDify 通过巧妙的三层映射机制，完美解决了 OpenAI API 无状态与 Dify API 有状态之间的矛盾：
 
 - **透明性**: 对客户端完全透明，无需修改现有代码
+- **智能性**: 多源用户标识提取，智能优先级处理
 - **高效性**: 充分利用 Dify 的状态管理能力
 - **兼容性**: 同时支持有状态和无状态客户端
+- **准确性**: 真实用户ID显示，精确的用户行为分析
 - **可靠性**: 持久化存储和自动恢复机制
-- **可扩展**: 支持多种会话标识提取方式
+- **可扩展**: 支持多种会话和用户标识提取方式
 
 这种设计使得 OpenDify 不仅是一个简单的 API 转换器，更是一个智能的状态管理代理，为用户提供了最佳的使用体验。

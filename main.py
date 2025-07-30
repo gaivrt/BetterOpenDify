@@ -308,6 +308,43 @@ def extract_webui_chat_id() -> Optional[str]:
     logger.debug("🔍 No chat_id found in request")
     return None
 
+def extract_webui_user_id() -> Optional[str]:
+    """从请求中提取 Open WebUI 的 user_id"""
+    # 调试：查找用户ID相关头部
+    logger.debug("🔍 Searching for user_id in headers:")
+    for header_name, header_value in request.headers:
+        if 'user' in header_name.lower():
+            logger.debug(f"🔍   Found user-related header: '{header_name}' = '{header_value[:8]}...'")
+    
+    # 方法1: 从 HTTP Header 提取 (支持多种大小写形式)
+    possible_headers = ['X-OpenWebUI-User-Id', 'x-openwebui-user-id', 'X-Openwebui-User-Id']
+    
+    for header_name in possible_headers:
+        user_id = request.headers.get(header_name)
+        if user_id:
+            logger.debug(f"🔍 Found user_id in header '{header_name}': {user_id[:8]}...")
+            return user_id
+    
+    # 方法2: 直接遍历所有头部查找包含 user-id 的
+    for header_name, header_value in request.headers:
+        if 'user-id' in header_name.lower():
+            logger.debug(f"🔍 Found user_id in header '{header_name}': {header_value[:8]}...")
+            return header_value
+    
+    # 方法3: 从请求体的 metadata 提取
+    try:
+        request_json = request.get_json() or {}
+        metadata = request_json.get('metadata', {})
+        user_id = metadata.get('user_id')
+        if user_id:
+            logger.debug(f"🔍 Found user_id in metadata: {user_id[:8]}...")
+            return user_id
+    except Exception as e:
+        logger.debug(f"Failed to extract user_id from metadata: {e}")
+    
+    logger.debug("🔍 No user_id found in request")
+    return None
+
 def transform_openai_to_dify(openai_request, endpoint, webui_chat_id=None):
     """将OpenAI格式的请求转换为Dify格式"""
     
@@ -323,12 +360,21 @@ def transform_openai_to_dify(openai_request, endpoint, webui_chat_id=None):
                 conversation_mapper.update_last_used(webui_chat_id)  # 更新使用时间
             logger.info(f"🔄 WebUI chat_id: {webui_chat_id[:8]}... -> Dify conversation_id: {dify_conversation_id[:8] if dify_conversation_id else 'None'}...")
         
+        # 提取用户ID - 优先级顺序
+        user_id = (
+            openai_request.get("user") or      # 1. OpenAI请求体中的user字段
+            extract_webui_user_id() or         # 2. OpenWebUI头部中的user-id  
+            "default_user"                     # 3. 默认值
+        )
+        
+        logger.debug(f"👤 User ID resolved: {user_id[:8] if user_id != 'default_user' else user_id}...")
+        
         dify_request = {
             "inputs": {},
             "query": messages[-1]["content"] if messages else "",
             "response_mode": "streaming" if stream else "blocking",
             "conversation_id": dify_conversation_id,
-            "user": openai_request.get("user", "default_user")
+            "user": user_id
         }
 
         # 添加历史消息（只在没有 conversation_id 时使用，避免重复）
@@ -403,10 +449,14 @@ def chat_completions():
         openai_request = request.get_json()
         logger.info(f"Received request: {json.dumps(openai_request, ensure_ascii=False)}")
         
-        # 提取 Open WebUI chat_id
+        # 提取 Open WebUI chat_id 和 user_id
         webui_chat_id = extract_webui_chat_id()
+        webui_user_id = extract_webui_user_id()
+        
         if webui_chat_id:
             logger.info(f"🔗 Processing request for WebUI chat_id: {webui_chat_id[:8]}...")
+        if webui_user_id:
+            logger.info(f"👤 Processing request for WebUI user_id: {webui_user_id[:8]}...")
         
         model = openai_request.get("model", "claude-3-5-sonnet-v2")
         logger.info(f"Using model: {model}")
