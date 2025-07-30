@@ -150,16 +150,29 @@ Content-Type: application/json
 
 ### Chat ID 映射
 
-OpenDify 自动处理 Open WebUI 的会话映射：
+OpenDify 自动处理 Open WebUI 的会话和用户映射：
 
+#### 会话管理
 1. **自动识别**: 从 HTTP 头部提取 `X-OpenWebUI-Chat-Id`
 2. **映射管理**: 自动建立和维护 chat_id 到 conversation_id 的映射
 3. **会话连续性**: 确保多轮对话的上下文连接
 
+#### 用户识别
+1. **多源提取**: 从多个来源智能提取用户标识
+2. **优先级处理**: OpenAI `user` 字段 > Open WebUI 头部 > 默认值
+3. **真实用户**: 在 Dify 平台显示真实的用户ID而非 "default_user"
+
 ### 支持的头部
+
+#### 会话标识头部
 - `X-OpenWebUI-Chat-Id`
 - `x-openwebui-chat-id`
 - `X-Openwebui-Chat-Id`
+
+#### 用户标识头部
+- `X-OpenWebUI-User-Id`
+- `x-openwebui-user-id`
+- `X-Openwebui-User-Id`
 
 ## 错误处理
 
@@ -243,6 +256,8 @@ curl -X GET "http://localhost:5000/v1/models" \
 curl -X POST "http://localhost:5000/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer any-key" \
+  -H "x-openwebui-chat-id: 92dd6958-0876-4f21-8fe9-f8b7ad52549c" \
+  -H "x-openwebui-user-id: 85134a10-4168-4742-8924-88925c1761d2" \
   -d '{
     "model": "claude-3-5-sonnet-v2",
     "messages": [
@@ -256,6 +271,8 @@ curl -X POST "http://localhost:5000/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer any-key" \
   -H "Accept: text/event-stream" \
+  -H "x-openwebui-chat-id: 92dd6958-0876-4f21-8fe9-f8b7ad52549c" \
+  -H "x-openwebui-user-id: 85134a10-4168-4742-8924-88925c1761d2" \
   -d '{
     "model": "claude-3-5-sonnet-v2",
     "messages": [

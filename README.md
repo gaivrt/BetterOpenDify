@@ -74,11 +74,46 @@ MODEL_CONFIG={"translator":"app-xxxxxx","code-assistant":"app-yyyyyy"}
 
 ### 运行服务
 
+#### 方式1: 生产环境部署（推荐）
+
+使用 Gunicorn 启动生产服务：
+
+```bash
+# 安装依赖
+make install
+
+# 启动生产服务
+make prod
+```
+
+#### 方式2: 开发环境
+
+启动开发服务（支持热重载）：
+
+```bash
+# 启动开发服务
+make dev
+```
+
+#### 方式3: Docker 部署（强烈推荐）
+
+```bash
+# 生产环境
+make docker-prod
+
+# 开发环境
+make docker-dev
+```
+
+#### 方式4: 传统方式（不推荐生产使用）
+
 ```bash
 python main.py
 ```
 
 服务将在 `http://127.0.0.1:5000` 启动
+
+> 💡 **建议**: 生产环境请使用 Gunicorn 或 Docker 部署，`python main.py` 仅适用于开发调试。
 
 ## API 使用
 

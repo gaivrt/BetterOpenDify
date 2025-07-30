@@ -2,3 +2,4 @@ flask
 httpx
 python-dotenv
 requests
+gunicorn

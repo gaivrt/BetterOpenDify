@@ -241,7 +241,43 @@ curl http://localhost:5000/v1/models
        return 0.001  # 固定最小延迟
    ```
 
-### 问题 8: 会话映射失败
+### 问题 8: 用户ID显示问题
+
+**现象**:
+- Dify 平台所有用户都显示为 "default_user"
+- 无法区分真实用户
+- 用户统计不准确
+
+**解决步骤**:
+
+1. **检查用户ID提取**:
+   ```bash
+   # 查看是否有用户ID相关日志
+   python main.py 2>&1 | grep "👤\|user"
+   
+   # 测试用户ID头部
+   curl -H "x-openwebui-user-id: test-user" \
+        -H "Content-Type: application/json" \
+        -d '{"model":"test","messages":[{"role":"user","content":"test"}]}' \
+        http://localhost:5000/v1/chat/completions
+   ```
+
+2. **验证头部格式**:
+   ```bash
+   # 确认发送的头部格式正确
+   # 支持的格式：
+   # - x-openwebui-user-id (推荐)
+   # - X-OpenWebUI-User-Id
+   # - X-Openwebui-User-Id
+   ```
+
+3. **检查日志输出**:
+   ```bash
+   # 寻找用户ID提取相关日志
+   tail -f logs/app.log | grep -E "🔍.*user|👤|User ID"
+   ```
+
+### 问题 9: 会话映射失败
 
 **现象**:
 - 多轮对话无法保持上下文
@@ -269,13 +305,13 @@ curl http://localhost:5000/v1/models
 
 3. **查看映射日志**:
    ```bash
-   # 查找会话相关日志
-   python main.py 2>&1 | grep -i "conversation\|mapping\|chat_id"
+   # 查找会话和用户相关日志
+   python main.py 2>&1 | grep -i "conversation\|mapping\|chat_id\|user_id"
    ```
 
 ## Docker 相关问题
 
-### 问题 9: Docker 容器无法启动
+### 问题 10: Docker 容器无法启动
 
 **错误信息**:
 ```
@@ -301,7 +337,7 @@ docker: Error response from daemon: Container command not found
    docker build -t opendify . --progress=plain
    ```
 
-### 问题 10: 容器内网络连接问题
+### 问题 11: 容器内网络连接问题
 
 **现象**:
 - 容器内无法访问外部 API
@@ -339,7 +375,7 @@ docker: Error response from daemon: Container command not found
 
 ## 性能问题
 
-### 问题 11: 响应速度慢
+### 问题 12: 响应速度慢
 
 **现象**:
 - API 响应时间超过 30 秒
@@ -382,7 +418,7 @@ docker: Error response from daemon: Container command not found
    ss -tuln
    ```
 
-### 问题 12: 内存泄漏
+### 问题 13: 内存泄漏
 
 **现象**:
 - 内存使用持续增长
@@ -492,7 +528,18 @@ docker: Error response from daemon: Container command not found
    python main.py 2>&1 | tail -50
    ```
 
-4. **网络测试结果**:
+4. **用户ID和会话测试**:
+   ```bash
+   # 测试用户ID提取
+   curl -H "x-openwebui-user-id: debug-user" \
+        -H "x-openwebui-chat-id: debug-chat" \
+        http://localhost:5000/v1/models
+   
+   # 查看相关日志
+   python main.py 2>&1 | grep -E "👤|🔍.*user"
+   ```
+
+5. **网络测试结果**:
    ```bash
    curl -I $DIFY_API_BASE
    ```

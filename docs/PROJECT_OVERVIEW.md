@@ -18,6 +18,7 @@ OpenDify 是一个将 Dify API 转换为 OpenAI API 格式的代理服务器，�
 
 ### 会话管理
 - **对话映射**: 自动管理 Open WebUI chat_id 与 Dify conversation_id 的映射关系
+- **用户识别**: 智能提取和管理用户标识，支持多种用户ID来源
 - **持久化存储**: 映射关系保存在 `data/conversation_mappings.json`
 - **会话清理**: 支持自动清理过期的会话映射
 
@@ -41,7 +42,15 @@ OpenDify 是一个将 Dify API 转换为 OpenAI API 格式的代理服务器，�
   - `set_mapping()` - 设置映射关系
   - `cleanup_old_mappings()` - 清理过期映射
 
-#### 3. HTTP 客户端管理
+#### 3. 用户标识管理
+- **多源提取**: 支持从 HTTP 头部、请求体、元数据提取用户ID
+- **优先级机制**: OpenAI user 字段 > Open WebUI 头部 > 默认值
+- **智能识别**: 自动识别 Open WebUI 用户标识格式
+- **函数**:
+  - `extract_webui_user_id()` - 提取 Open WebUI 用户ID
+  - `extract_webui_chat_id()` - 提取 Open WebUI 会话ID
+
+#### 4. HTTP 客户端管理
 - **连接池**: 使用 httpx 客户端复用连接
 - **超时控制**: 30秒请求超时
 - **错误处理**: 完整的异常捕获和处理
@@ -55,11 +64,12 @@ OpenAI Client → OpenDify → Dify API
 ```
 
 1. **请求接收**: 客户端发送 OpenAI 格式请求
-2. **请求转换**: 转换为 Dify API 格式
-3. **会话映射**: 处理 Open WebUI chat_id 映射
-4. **API 调用**: 调用 Dify API
-5. **响应转换**: 将 Dify 响应转换为 OpenAI 格式
-6. **流式输出**: 优化的流式响应处理
+2. **身份识别**: 提取用户ID和会话ID（支持多种来源）
+3. **请求转换**: 转换为 Dify API 格式，包含正确的用户标识
+4. **会话映射**: 处理 Open WebUI chat_id 到 Dify conversation_id 映射
+5. **API 调用**: 调用 Dify API
+6. **响应转换**: 将 Dify 响应转换为 OpenAI 格式
+7. **流式输出**: 优化的流式响应处理
 
 ## 配置系统
 
