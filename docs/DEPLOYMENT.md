@@ -37,7 +37,48 @@ export MODEL_CONFIG='{"claude-3-5-sonnet":"app-your-key"}'
 ./start_development.sh
 ```
 
-### 方式2: Docker Compose（推荐）
+### 方式2: Docker 部署脚本（强烈推荐）
+
+#### 完整自动化部署
+```bash
+# 1. 上传镜像和脚本到服务器
+scp opendify.tar.gz deploy.sh user@server:/path/to/deploy/
+
+# 2. 在服务器上部署
+ssh user@server
+cd /path/to/deploy/
+
+# 3. 加载镜像
+docker load < opendify.tar.gz
+
+# 4. 交互式配置（安全，不写死敏感信息）
+./deploy.sh setup
+
+# 5. 一键部署
+./deploy.sh deploy
+
+# 6. 检查状态
+./deploy.sh status
+```
+
+#### 部署脚本功能
+- ✅ **交互式配置创建**：避免敏感信息泄露
+- ✅ **自动健康检查**：确保服务正常启动
+- ✅ **完整状态监控**：实时查看服务状态
+- ✅ **简单更新流程**：一键更新部署
+- ✅ **多环境支持**：支持不同环境配置
+
+#### 常用命令
+```bash
+./deploy.sh setup     # 创建配置文件
+./deploy.sh deploy    # 部署服务
+./deploy.sh status    # 查看状态
+./deploy.sh logs      # 查看日志
+./deploy.sh update    # 更新部署
+./deploy.sh stop      # 停止服务
+```
+
+### 方式3: Docker Compose
 
 #### 生产环境部署
 ```bash
@@ -91,6 +132,46 @@ preload_app = True
 
 ### 环境变量配置
 
+#### 方案A：交互式动态配置（推荐）
+
+使用部署脚本自动创建配置，避免在代码中写死敏感信息：
+
+```bash
+# 1. 交互式创建配置
+./deploy.sh setup
+
+# 2. 为不同环境创建不同配置
+./deploy.sh setup --env-file .env.production   # 生产环境
+./deploy.sh setup --env-file .env.staging      # 测试环境
+./deploy.sh setup --env-file .env.development  # 开发环境
+```
+
+**交互过程示例**：
+```bash
+🔧 创建环境配置文件
+请输入配置信息:
+DIFY API 地址 (例: https://api.dify.ai/v1): https://your-production-dify.com/v1
+配置模型 (输入 'done' 完成):
+模型名称 (或 'done'): claude-3-5-sonnet
+API Key (app-xxxxx): app-your-production-key-123
+模型名称 (或 'done'): gpt-4-turbo
+API Key (app-xxxxx): app-another-production-key
+模型名称 (或 'done'): done
+
+✅ 配置文件已创建: .env.production
+```
+
+生成的配置文件：
+```bash
+# .env.production
+DIFY_API_BASE="https://your-production-dify.com/v1"
+MODEL_CONFIG='{"claude-3-5-sonnet":"app-your-production-key-123","gpt-4-turbo":"app-another-production-key"}'
+SERVER_HOST="0.0.0.0"
+SERVER_PORT=5000
+```
+
+#### 方案B：手动配置
+
 #### 服务器配置
 ```bash
 SERVER_HOST=0.0.0.0              # 监听地址
@@ -110,6 +191,14 @@ LOG_LEVEL=info                  # 日志级别
 DIFY_API_BASE="https://api.dify.ai/v1"
 MODEL_CONFIG='{"model":"api-key"}'
 ```
+
+#### 安全优势
+
+**动态配置的安全性**：
+- ✅ 敏感信息不出现在代码和脚本中
+- ✅ 每个环境独立配置文件
+- ✅ 配置文件可设置严格权限 (`chmod 600`)
+- ✅ 支持配置文件加密存储
 
 ### 启动脚本详解
 

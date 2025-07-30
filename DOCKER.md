@@ -16,11 +16,26 @@ docker build -t opendify:latest .
 ```
 
 ### 3. 运行容器
-```bash
-# 方式1: 直接运行
-docker run -p 5000:5000 --env-file .env opendify:latest
 
-# 方式2: 使用docker-compose
+#### 方式1: 使用部署脚本（推荐）
+```bash
+# 交互式安全配置
+./deploy.sh setup
+
+# 一键部署
+./deploy.sh deploy
+
+# 查看状态
+./deploy.sh status
+```
+
+#### 方式2: 直接运行
+```bash
+docker run -p 5000:5000 --env-file .env opendify:latest
+```
+
+#### 方式3: 使用docker-compose
+```bash
 docker-compose up -d
 ```
 
@@ -46,14 +61,34 @@ docker-compose --profile with-nginx up -d
 
 ### 生产环境部署建议
 
+#### 使用部署脚本（最佳实践）
+
+1. **安全配置**: 使用 `./deploy.sh setup` 交互式创建配置
+2. **自动化部署**: 使用 `./deploy.sh deploy` 一键部署
+3. **健康监控**: 使用 `./deploy.sh status` 监控服务状态
+4. **简化更新**: 使用 `./deploy.sh update` 更新服务
+
+#### 传统部署方式
+
 1. **资源限制**: 根据实际需求调整CPU和内存限制
 2. **日志管理**: 配置日志轮转
-3. **监控**: 使用健康检查端点 `/health`
+3. **监控**: 使用健康检查端点 `/v1/models`
 4. **安全**: 使用HTTPS和适当的防火墙规则
+
+#### 部署脚本优势
+
+- ✅ **零配置泄露**: 敏感信息不出现在代码中
+- ✅ **自动验证**: 自动检查服务健康状态
+- ✅ **多环境支持**: 支持开发、测试、生产环境
+- ✅ **简化运维**: 提供完整的服务管理命令
 
 ### 健康检查
 ```bash
-curl http://localhost:5000/health
+# 检查服务状态（使用部署脚本）
+./deploy.sh status
+
+# 手动检查 API 可用性
+curl http://localhost:5000/v1/models
 ```
 
 ### 查看日志
