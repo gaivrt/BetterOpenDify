@@ -65,4 +65,10 @@ coverage.xml
 
 # Data directory (persistent mappings)
 data/
-!data/.gitkeep 
+!data/.gitkeep
+
+# Archive files (Docker images, deployment packages)
+*.tar.gz
+*.zip
+*.tar
+*.tgz 
