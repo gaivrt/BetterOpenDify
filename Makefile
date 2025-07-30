@@ -36,14 +36,14 @@ install:
 # 开发环境
 dev: install
 	@echo "🛠️ 启动开发环境..."
-	chmod +x start_development.sh
-	./start_development.sh
+	chmod +x scripts/start_development.sh
+	./scripts/start_development.sh
 
 # 生产环境
 prod: install
 	@echo "🚀 启动生产环境..."
-	chmod +x start_production.sh
-	./start_production.sh
+	chmod +x scripts/start_production.sh
+	./scripts/start_production.sh
 
 # Docker 开发环境
 docker-dev:
@@ -71,7 +71,7 @@ docker-stop:
 # 运行测试
 test:
 	@echo "🧪 运行API测试..."
-	python test_api.py
+	python tests/test_api.py
 
 # 清理临时文件
 clean:
@@ -84,12 +84,12 @@ clean:
 # 构建Docker镜像
 build:
 	@echo "🔨 构建生产环境Docker镜像..."
-	./build.sh prod latest
+	./scripts/build.sh prod latest
 
 # 构建开发环境镜像
 build-dev:
 	@echo "🔨 构建开发环境Docker镜像..."
-	./build.sh dev latest
+	./scripts/build.sh dev latest
 
 # 构建所有镜像
 build-all: build build-dev

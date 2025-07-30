@@ -101,11 +101,11 @@ make dev
 
 ```bash
 # 1. 构建和导出镜像
-./build.sh
-./export_image.sh
+./scripts/build.sh
+./scripts/export_image.sh
 
 # 2. 上传到服务器
-scp opendify.tar.gz deploy.sh user@server:/path/
+scp opendify.tar.gz scripts/deploy.sh user@server:/path/
 
 # 3. 服务器上部署
 ssh user@server
@@ -134,7 +134,7 @@ make docker-dev
 
 #### 部署脚本功能
 
-部署脚本 `deploy.sh` 提供完整的生产部署管理：
+部署脚本 `scripts/deploy.sh` 提供完整的生产部署管理：
 
 - ✅ **安全配置**：交互式创建配置，避免敏感信息泄露
 - ✅ **健康检查**：自动验证服务启动状态
@@ -144,12 +144,12 @@ make docker-dev
 
 ```bash
 # 部署脚本命令
-./deploy.sh setup     # 创建配置文件
-./deploy.sh deploy    # 部署服务
-./deploy.sh update    # 更新部署
-./deploy.sh status    # 查看状态
-./deploy.sh logs      # 查看日志
-./deploy.sh stop      # 停止服务
+./scripts/deploy.sh setup     # 创建配置文件
+./scripts/deploy.sh deploy    # 部署服务
+./scripts/deploy.sh update    # 更新部署
+./scripts/deploy.sh status    # 查看状态
+./scripts/deploy.sh logs      # 查看日志
+./scripts/deploy.sh stop      # 停止服务
 ```
 
 #### 方式4: 传统方式（不推荐生产使用）
@@ -248,6 +248,72 @@ for chunk in response:
 - **[API 文档](docs/API_DOCUMENTATION.md)** - 接口使用说明
 - **[配置指南](docs/CONFIGURATION_GUIDE.md)** - 环境配置详解
 - **[故障排除](docs/TROUBLESHOOTING.md)** - 问题诊断和解决
+
+## 📁 项目结构
+
+```
+OpenDify/
+├── main.py                    # 主应用程序
+├── requirements.txt           # Python 依赖
+├── gunicorn_config.py        # Gunicorn 生产配置
+├── Dockerfile                # Docker 镜像构建
+├── docker-compose.yml        # Docker Compose 配置
+├── nginx.conf               # Nginx 反向代理配置
+├── Makefile                 # Make 构建命令
+├── docs/                    # 📖 项目文档
+│   ├── README.md           # 文档索引
+│   ├── DEPLOYMENT.md       # 部署指南
+│   ├── API_DOCUMENTATION.md # API 文档
+│   ├── CONFIGURATION_GUIDE.md # 配置指南
+│   ├── STATE_MANAGEMENT.md  # 状态管理
+│   ├── TROUBLESHOOTING.md   # 故障排除
+│   └── chat-id-integration-guide.md # Chat ID 集成
+├── scripts/                 # 🔧 构建和部署脚本
+│   ├── README.md           # 脚本说明文档
+│   ├── build.sh            # Docker 镜像构建
+│   ├── export_image.sh     # 镜像导出
+│   ├── deploy.sh           # 生产部署管理
+│   ├── run_docker.sh       # Docker 容器运行
+│   ├── run_compose.sh      # Docker Compose 运行
+│   ├── start_production.sh # Gunicorn 生产启动
+│   └── start_development.sh # 开发环境启动
+├── tests/                   # 🧪 测试文件
+│   ├── README.md           # 测试说明文档
+│   ├── test_api.py         # API 兼容性测试
+│   ├── manual_test.py      # 手动交互测试
+│   └── test_conversation_mapping.py # 会话映射测试
+└── data/                    # 💾 数据存储
+    └── conversation_mappings.json # 会话映射持久化
+```
+
+## 🧪 测试
+
+### 运行测试
+```bash
+# API 兼容性测试
+python tests/test_api.py
+
+# 会话映射测试
+python tests/test_conversation_mapping.py
+
+# 手动交互测试
+python tests/manual_test.py
+```
+
+详细测试说明请参考 [tests/README.md](tests/README.md)。
+
+## 🔧 开发工具
+
+### 构建脚本
+- `scripts/build.sh` - Docker 镜像构建
+- `scripts/export_image.sh` - 镜像导出
+
+### 部署脚本
+- `scripts/deploy.sh` - 生产部署管理
+- `scripts/start_production.sh` - Gunicorn 生产启动
+- `scripts/start_development.sh` - 开发环境启动
+
+详细脚本说明请参考 [scripts/README.md](scripts/README.md)。
 
 ## 贡献指南
 
