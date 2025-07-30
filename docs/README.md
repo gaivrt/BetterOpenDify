@@ -1,37 +1,27 @@
-# OpenDify 文档中心
+# OpenDify 文档
 
-## 📚 文档索引
+## 📚 文档目录
 
-### 核心文档
-- **[Chat ID 集成指南](chat-id-integration-guide.md)** - 解决 Open WebUI 多轮对话历史记录问题
-- **[部署指南](DEPLOYMENT_GUIDE.md)** - Docker 部署和生产环境配置
+### 🚀 部署和配置
+- **[部署指南](DEPLOYMENT.md)** - 完整的生产部署流程（Docker、Gunicorn、自动化脚本）
+- **[配置指南](CONFIGURATION_GUIDE.md)** - 环境变量配置和最佳实践
 
-### 快速导航
+### 📖 使用指南  
+- **[API 文档](API_DOCUMENTATION.md)** - OpenAI 兼容 API 接口说明
+- **[状态管理](STATE_MANAGEMENT.md)** - 用户ID和会话管理机制详解
 
-#### 🚀 快速开始
-- [部署指南](DEPLOYMENT_GUIDE.md) - 一键部署到生产环境
+### 🔧 故障排除
+- **[故障排除指南](TROUBLESHOOTING.md)** - 常见问题诊断和解决方案
+- **[Chat ID 集成](chat-id-integration-guide.md)** - Open WebUI 会话连续性问题解决
 
-#### 🔧 集成配置
-- [Chat ID 集成](chat-id-integration-guide.md) - 修复多轮对话问题
+## 🎯 快速导航
 
-#### 📋 故障排查
-- [Chat ID 调试](chat-id-integration-guide.md#调试方法) - 诊断会话映射问题
+**首次部署**：[部署指南](DEPLOYMENT.md) → [配置指南](CONFIGURATION_GUIDE.md)
 
-## 🎯 文档说明
+**API 集成**：[API 文档](API_DOCUMENTATION.md) → [状态管理](STATE_MANAGEMENT.md)
 
-本文档中心包含 OpenDify 项目的所有技术文档，涵盖：
+**问题解决**：[故障排除](TROUBLESHOOTING.md) → [Chat ID 集成](chat-id-integration-guide.md)
 
-- **部署配置** - 环境搭建和生产部署
-- **集成指南** - 与 Open WebUI、Dify 的集成
-- **故障排查** - 常见问题解决方案
-- **API 参考** - 接口文档和使用示例
+---
 
-## 📖 阅读建议
-
-1. **新用户**: 先阅读 [部署指南](DEPLOYMENT_GUIDE.md)
-2. **集成问题**: 参考 [Chat ID 集成指南](chat-id-integration-guide.md)
-3. **运维人员**: 关注部署和故障排查部分
-
-## 🔄 文档更新
-
-文档会随着项目发展持续更新，如有疑问请提交 Issue。
+💡 **提示**：所有文档都支持安全的动态环境变量配置，避免敏感信息泄露。

@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  opendify:
+    image: opendify:latest
+    container_name: opendify
+    ports:
+      - "${SERVER_PORT:-5000}:5000"
+    
+    # 从 .env 文件读取环境变量
+    env_file:
+      - .env.production
+    
+    # 或者直接在这里配置（不推荐，仅作示例）
+    # environment:
+    #   - DIFY_API_BASE=${DIFY_API_BASE}
+    #   - MODEL_CONFIG=${MODEL_CONFIG}
+    #   - SERVER_HOST=0.0.0.0
+    #   - SERVER_PORT=5000
+    
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # 重启策略
+    restart: unless-stopped
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/v1/models"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
