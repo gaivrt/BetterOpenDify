@@ -1,7 +1,7 @@
 # 必须放在所有import之前!
 from gevent import monkey
-# 不 patch threading，避免影响 Lock 和文件操作
-monkey.patch_all(thread=False)
+# 现在使用 SQLite 数据库，可以安全地 patch 所有模块
+monkey.patch_all()
 
 import json
 import logging
@@ -261,14 +261,17 @@ def transform_openai_to_dify(openai_request, endpoint, webui_chat_id=None):
             "default_user"                     # 3. 默认值
         )
         
-        logger.debug(f"👤 User ID resolved: {user_id[:8] if user_id != 'default_user' else user_id}...")
+        # 为用户ID添加前缀以区分来源
+        dify_user_id = f"open_webui_{user_id}" if user_id != "default_user" else "open_webui_default_user"
+        
+        logger.debug(f"👤 User ID resolved: {user_id[:8] if user_id != 'default_user' else user_id}... -> Dify user_id: {dify_user_id[:16]}...")
         
         dify_request = {
             "inputs": {},
             "query": messages[-1]["content"] if messages else "",
             "response_mode": "streaming" if stream else "blocking",
             "conversation_id": dify_conversation_id,
-            "user": user_id
+            "user": dify_user_id
         }
 
         # 添加历史消息（只在没有 conversation_id 时使用，避免重复）
