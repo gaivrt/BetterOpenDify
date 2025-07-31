@@ -1,3 +1,8 @@
+# 必须放在所有import之前!
+from gevent import monkey
+# 不 patch threading，避免影响 Lock 和文件操作
+monkey.patch_all(thread=False)
+
 import json
 import logging
 from flask import Flask, request, Response, stream_with_context

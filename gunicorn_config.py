@@ -13,7 +13,7 @@ backlog = 2048
 
 # 工作进程配置
 workers = int(os.getenv('GUNICORN_WORKERS', multiprocessing.cpu_count() * 2 + 1))
-worker_class = "sync"  # Flask 使用同步工作进程
+worker_class = "gevent"  # 使用 gevent 异步工作进程，适合 I/O 密集型应用
 worker_connections = 1000
 max_requests = 1000
 max_requests_jitter = 50
