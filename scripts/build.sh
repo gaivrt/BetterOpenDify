@@ -47,6 +47,9 @@ fi
 echo "📦 镜像名称: ${FULL_IMAGE_NAME}"
 echo "📋 使用文件: ${DOCKERFILE}"
 
+# 切换到项目根目录
+cd "$(dirname "$0")/.."
+
 # 检查 Dockerfile 是否存在
 if [ ! -f "$DOCKERFILE" ]; then
     echo "❌ 错误: $DOCKERFILE 文件不存在"
