@@ -11,7 +11,6 @@ import time
 from dotenv import load_dotenv
 import os
 import ast
-from threading import Lock
 from typing import Dict, Optional
 
 # 配置日志
@@ -27,121 +26,11 @@ logging.getLogger("httpx").setLevel(logging.DEBUG)
 # 加载环境变量
 load_dotenv()
 
-class ConversationMapper:
-    """管理 Open WebUI chat_id 到 Dify conversation_id 的映射关系"""
-    
-    def __init__(self, storage_file="data/conversation_mappings.json"):
-        # 确保数据目录存在
-        os.makedirs(os.path.dirname(storage_file), exist_ok=True)
-        self.storage_file = storage_file
-        self._mapping: Dict[str, dict] = {}  # 改为dict存储更多信息
-        self._lock = Lock()
-        self._load_mappings()
-        logger.info("✅ ConversationMapper initialized")
-    
-    def _load_mappings(self) -> None:
-        """从文件加载映射关系"""
-        try:
-            if os.path.exists(self.storage_file):
-                with open(self.storage_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self._mapping = data
-                    logger.info(f"📂 Loaded {len(self._mapping)} conversation mappings from {self.storage_file}")
-            else:
-                logger.info(f"📂 No existing mappings file found, starting fresh")
-        except Exception as e:
-            logger.error(f"❌ Failed to load mappings from {self.storage_file}: {e}")
-            self._mapping = {}
-    
-    def _save_mappings(self) -> None:
-        """保存映射关系到文件"""
-        try:
-            with open(self.storage_file, 'w', encoding='utf-8') as f:
-                json.dump(self._mapping, f, ensure_ascii=False, indent=2)
-            logger.debug(f"💾 Saved {len(self._mapping)} mappings to {self.storage_file}")
-        except Exception as e:
-            logger.error(f"❌ Failed to save mappings to {self.storage_file}: {e}")
-    
-    def get_dify_conversation_id(self, webui_chat_id: str) -> Optional[str]:
-        """根据 Open WebUI chat_id 获取对应的 Dify conversation_id"""
-        with self._lock:
-            mapping_info = self._mapping.get(webui_chat_id)
-            return mapping_info.get('dify_conversation_id') if mapping_info else None
-    
-    def set_mapping(self, webui_chat_id: str, dify_conversation_id: str) -> None:
-        """设置映射关系"""
-        with self._lock:
-            self._mapping[webui_chat_id] = {
-                'dify_conversation_id': dify_conversation_id,
-                'created_at': int(time.time()),
-                'last_used': int(time.time())
-            }
-            self._save_mappings()  # 立即持久化
-            logger.info(f"🔗 Mapped WebUI chat_id {webui_chat_id[:8]}... to Dify conversation_id {dify_conversation_id[:8]}...")
-    
-    def has_mapping(self, webui_chat_id: str) -> bool:
-        """检查是否存在映射关系"""
-        with self._lock:
-            return webui_chat_id in self._mapping
-    
-    def remove_mapping(self, webui_chat_id: str) -> bool:
-        """删除映射关系"""
-        with self._lock:
-            if webui_chat_id in self._mapping:
-                del self._mapping[webui_chat_id]
-                self._save_mappings()  # 立即持久化
-                logger.info(f"🗑️  Removed mapping for WebUI chat_id {webui_chat_id[:8]}...")
-                return True
-            return False
-    
-    def get_mapping_count(self) -> int:
-        """获取当前映射数量"""
-        with self._lock:
-            return len(self._mapping)
-    
-    def update_last_used(self, webui_chat_id: str) -> None:
-        """更新映射的最后使用时间"""
-        with self._lock:
-            if webui_chat_id in self._mapping:
-                self._mapping[webui_chat_id]['last_used'] = int(time.time())
-                self._save_mappings()
-    
-    def cleanup_old_mappings(self, max_age_days: int = 30) -> int:
-        """清理超过指定天数的映射"""
-        cutoff_time = int(time.time()) - (max_age_days * 24 * 60 * 60)
-        removed_count = 0
-        
-        with self._lock:
-            keys_to_remove = []
-            for chat_id, mapping_info in self._mapping.items():
-                if mapping_info.get('last_used', 0) < cutoff_time:
-                    keys_to_remove.append(chat_id)
-            
-            for key in keys_to_remove:
-                del self._mapping[key]
-                removed_count += 1
-            
-            if removed_count > 0:
-                self._save_mappings()
-                logger.info(f"🧹 Cleaned up {removed_count} old mappings (older than {max_age_days} days)")
-        
-        return removed_count
-    
-    def get_mapping_stats(self) -> dict:
-        """获取映射统计信息"""
-        with self._lock:
-            if not self._mapping:
-                return {"total": 0, "oldest": None, "newest": None}
-            
-            created_times = [info.get('created_at', 0) for info in self._mapping.values()]
-            return {
-                "total": len(self._mapping),
-                "oldest": min(created_times) if created_times else None,
-                "newest": max(created_times) if created_times else None
-            }
+# 导入SQLite版本的ConversationMapper
+from conversation_mapper_sqlite import ConversationMapper
 
-# 全局会话映射器实例
-conversation_mapper = ConversationMapper()
+# 全局会话映射器实例 - 使用SQLite数据库存储
+conversation_mapper = ConversationMapper("data/conversation_mappings.db")
 
 def parse_model_config():
     """
@@ -757,6 +646,7 @@ def get_conversation_mappings():
         "mapping_count": stats["total"],
         "oldest_mapping": stats["oldest"],
         "newest_mapping": stats["newest"],
+        "avg_last_used": stats.get("avg_last_used"),
         "timestamp": int(time.time())
     }
 
@@ -770,6 +660,52 @@ def cleanup_old_conversations():
         "max_age_days": max_age_days,
         "timestamp": int(time.time())
     }
+
+@app.route('/v1/conversation/recent', methods=['GET'])
+def get_recent_conversations():
+    """获取最近的会话映射（调试用）"""
+    limit = request.args.get('limit', default=10, type=int)
+    recent_mappings = conversation_mapper.get_recent_mappings(limit)
+    
+    mappings = []
+    for webui_chat_id, dify_conversation_id, created_at, last_used in recent_mappings:
+        mappings.append({
+            "webui_chat_id": webui_chat_id[:8] + "...",  # 部分隐藏敏感信息
+            "dify_conversation_id": dify_conversation_id[:8] + "...",
+            "created_at": created_at,
+            "last_used": last_used,
+            "age_hours": (int(time.time()) - last_used) // 3600
+        })
+    
+    return {
+        "recent_mappings": mappings,
+        "limit": limit,
+        "timestamp": int(time.time())
+    }
+
+@app.route('/v1/conversation/database/info', methods=['GET'])
+def get_database_info():
+    """获取数据库信息（监控用）"""
+    db_info = conversation_mapper.get_database_info()
+    return db_info
+
+@app.route('/v1/conversation/database/optimize', methods=['POST'])
+def optimize_database():
+    """优化数据库性能"""
+    try:
+        conversation_mapper.optimize_database()
+        return {
+            "status": "success",
+            "message": "Database optimization completed",
+            "timestamp": int(time.time())
+        }
+    except Exception as e:
+        logger.error(f"Database optimization failed: {e}")
+        return {
+            "status": "error", 
+            "message": str(e),
+            "timestamp": int(time.time())
+        }, 500
 
 if __name__ == '__main__':
     # 验证配置

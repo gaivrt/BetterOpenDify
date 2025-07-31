@@ -50,6 +50,11 @@
 - **功能**: 使用 Docker Compose 运行
 - **用途**: 启动完整的服务栈（包括 Nginx）
 - **运行**: `./scripts/run_compose.sh`
+- **新特性**: 
+  - ✅ SQLite 数据库状态检查
+  - ✅ 会话映射统计显示
+  - ✅ 新增监控端点信息
+  - ✅ 并发测试命令提示
 
 #### `start_production.sh`
 - **功能**: 生产环境 Gunicorn 启动
@@ -119,10 +124,32 @@ ssh user@server
 - 详细的日志输出
 - 模块化设计
 
+## 数据库迁移工具
+
+### `migrate_to_sqlite.py` (位于项目根目录)
+- **功能**: 从 JSON 文件迁移到 SQLite 数据库
+- **用途**: 升级数据存储方案，支持多进程并发
+- **运行**: `python migrate_to_sqlite.py`
+- **特性**:
+  - ✅ 自动备份原文件
+  - ✅ 数据完整性验证
+  - ✅ 详细的迁移日志
+  - ✅ 支持新旧数据格式
+
+**使用示例**:
+```bash
+# 默认迁移
+python migrate_to_sqlite.py
+
+# 指定文件路径
+python migrate_to_sqlite.py data/old_mappings.json data/new_mappings.db
+```
+
 ## 环境要求
 
-- **Docker**: 构建和运行相关脚本需要 Docker
+- **Docker**: 构建和运行相关脚本需要 Docker  
 - **Python 3.9+**: Gunicorn 启动脚本需要 Python
+- **SQLite**: 内置于 Python，无需额外安装
 - **Bash**: 所有脚本都使用 Bash 编写
 - **网络访问**: 部署脚本需要访问 Dify API
 
