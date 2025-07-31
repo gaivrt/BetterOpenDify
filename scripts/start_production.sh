@@ -5,6 +5,9 @@
 
 set -e
 
+# 切换到项目根目录
+cd "$(dirname "$0")/.."
+
 echo "🚀 启动 OpenDify 生产服务..."
 
 # 检查环境变量

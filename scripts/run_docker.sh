@@ -2,6 +2,9 @@
 
 # OpenDify Docker 运行脚本（无需构建）
 
+# 切换到项目根目录
+cd "$(dirname "$0")/.."
+
 echo "🚀 启动 OpenDify 服务..."
 
 # 检查是否有 .env 文件

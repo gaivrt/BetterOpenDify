@@ -2,6 +2,9 @@
 
 # 运行Docker Compose的脚本
 
+# 切换到项目根目录
+cd "$(dirname "$0")/.."
+
 echo "🚀 启动 OpenDify 服务..."
 
 # 检查是否有.env文件

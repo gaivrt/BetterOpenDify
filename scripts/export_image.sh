@@ -2,6 +2,9 @@
 
 # 导出 Docker 镜像脚本
 
+# 切换到项目根目录
+cd "$(dirname "$0")/.."
+
 echo "🔨 构建 Docker 镜像..."
 docker build -t opendify . || {
     echo "❌ 构建失败"
