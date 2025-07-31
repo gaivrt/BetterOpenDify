@@ -21,7 +21,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制应用代码和配置文件
-COPY main.py gunicorn_config.py start_production.sh ./
+COPY main.py gunicorn_config.py ./
+COPY scripts/start_production.sh ./
 
 # 创建必要的目录
 RUN mkdir -p data logs
