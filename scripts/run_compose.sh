@@ -65,8 +65,8 @@ if curl -s http://localhost:5000/v1/models > /dev/null; then
     echo "   - 数据库信息: curl http://localhost:5000/v1/conversation/database/info"
     echo "   - 最近会话: curl http://localhost:5000/v1/conversation/recent"
     echo ""
-    echo "🧪 运行测试: python test_api.py"
-    echo "🔧 并发测试: python test_multiprocess.py"
+    echo "🧪 运行测试: python tests/test_api.py"
+    echo "🔧 并发测试: python tests/test_multiprocess.py"
 else
     echo "❌ 服务启动失败"
     echo "查看日志: docker-compose logs"
