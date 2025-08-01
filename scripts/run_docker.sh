@@ -52,7 +52,7 @@ if docker ps | grep -q "opendify"; then
         echo "   - 停止服务: docker stop opendify"
         echo "   - 重启服务: docker restart opendify"
         echo ""
-        echo "🧪 测试API: python test_api.py"
+        echo "🧪 测试API: python tests/test_api.py"
     else
         echo "⚠️  容器已启动但服务未响应"
         echo "查看日志: docker logs opendify"

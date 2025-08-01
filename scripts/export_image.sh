@@ -5,11 +5,27 @@
 # 切换到项目根目录
 cd "$(dirname "$0")/.."
 
-echo "🔨 构建 Docker 镜像..."
-docker build -t opendify . || {
-    echo "❌ 构建失败"
-    exit 1
-}
+# 检查镜像是否已存在
+if docker image inspect opendify &> /dev/null; then
+    echo "🔍 发现已存在的 opendify 镜像"
+    echo -n "是否重新构建？[y/N]: "
+    read -r REBUILD
+    if [[ ! "$REBUILD" =~ ^[Yy]$ ]]; then
+        echo "⏭️  跳过构建，使用现有镜像"
+    else
+        echo "🔨 重新构建 Docker 镜像..."
+        docker build -t opendify . || {
+            echo "❌ 构建失败"
+            exit 1
+        }
+    fi
+else
+    echo "🔨 构建 Docker 镜像..."
+    docker build -t opendify . || {
+        echo "❌ 构建失败"
+        exit 1
+    }
+fi
 
 echo "📦 导出镜像为压缩文件..."
 docker save opendify | gzip > opendify.tar.gz
