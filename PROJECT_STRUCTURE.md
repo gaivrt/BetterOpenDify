@@ -39,9 +39,9 @@
 ### 🧪 tests/ - 测试文件
 存放所有测试相关文件，包括：
 - `README.md` - 测试说明和使用指南
-- `test_api.py` - OpenAI API 兼容性测试
-- `manual_test.py` - 手动交互式测试
-- `test_conversation_mapping.py` - 会话映射功能测试
+- `tests/test_api.py` - OpenAI API 兼容性测试
+- `tests/manual_test.py` - 手动交互式测试
+- `tests/test_conversation_mapping.py` - 会话映射功能测试
 
 ### 💾 data/ - 数据存储
 存放运行时数据文件：
