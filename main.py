@@ -481,6 +481,9 @@ def chat_completions():
                                                 generate.message_id = message_id
                                                 # 在流式响应的第一个消息中更新映射
                                                 update_conversation_mapping(webui_chat_id, dify_chunk)
+                                                logger.debug(f"📋 Dify Stream Chunk (first): {json.dumps(dify_chunk, ensure_ascii=False, indent=2)}")
+                                            else:
+                                                logger.debug(f"📋 Dify Stream Chunk: {json.dumps(dify_chunk, ensure_ascii=False)}")
                                             
                                             # 将当前批次的字符添加到输出缓冲区
                                             for char in current_answer:
@@ -498,6 +501,8 @@ def chat_completions():
                                             continue
                                         
                                         elif dify_chunk.get("event") == "message_end":
+                                            logger.debug(f"📋 Dify Stream End: {json.dumps(dify_chunk, ensure_ascii=False, indent=2)}")
+                                            
                                             # 快速输出剩余内容
                                             while output_buffer:
                                                 char, msg_id = output_buffer.pop(0)
@@ -517,6 +522,11 @@ def chat_completions():
                                             }
                                             yield flush_chunk(f"data: {json.dumps(final_chunk)}\n\n")
                                             yield flush_chunk("data: [DONE]\n\n")
+                                        
+                                        else:
+                                            # 打印其他类型的chunk用于调试
+                                            if dify_chunk.get("event"):
+                                                logger.debug(f"📋 Dify Stream Other Event [{dify_chunk.get('event')}]: {json.dumps(dify_chunk, ensure_ascii=False)}")
                                         
                                     except json.JSONDecodeError as e:
                                         logger.warning(f"JSON decode error in streaming response: {str(e)}, line: {json_str[:100]}...")
@@ -577,6 +587,7 @@ def chat_completions():
 
                 dify_response = response.json()
                 logger.info(f"Received response from Dify: {json.dumps(dify_response, ensure_ascii=False)}")
+                logger.debug(f"📋 Dify Complete Response: {json.dumps(dify_response, ensure_ascii=False, indent=2)}")
                 
                 # 更新会话映射
                 update_conversation_mapping(webui_chat_id, dify_response)

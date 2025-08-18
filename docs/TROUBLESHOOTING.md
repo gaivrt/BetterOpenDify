@@ -491,10 +491,10 @@ docker: Error response from daemon: Container command not found
 1. **自动化测试**:
    ```bash
    # 运行内置测试
-   python test_api.py
+   python tests/test_api.py
    
    # 自定义服务器测试
-   python test_api.py http://localhost:5000/v1
+   python tests/test_api.py http://localhost:5000/v1
    ```
 
 2. **压力测试**:
