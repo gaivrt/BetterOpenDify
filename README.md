@@ -14,6 +14,18 @@ OpenDify 是一个将 Dify API 转换为 OpenAI API 格式的代理服务器。�
 - 兼容标准的 OpenAI API 客户端
 - 灵活的模型配置支持
 
+### 🧠 智能会话记忆管理
+- **SQLite持久化存储** - 解决多进程并发访问问题
+- **自动会话映射** - Open WebUI Chat ID ↔ Dify Conversation ID
+- **会话连续性保障** - 多轮对话上下文完整保持
+- **用户身份识别** - 自动提取和处理 Open WebUI 用户标识
+- **并发安全访问** - 支持 Gunicorn 多进程部署
+
+### 🔐 用户身份集成
+- **Open WebUI 用户ID支持** - 自动添加 `open_webui_` 前缀
+- **多格式头部识别** - 灵活支持不同的用户标识头部格式
+- **会话隔离** - 确保不同用户的会话独立性
+
 ## 支持的模型
 
 支持任意 Dify 模型，只需在配置文件中添加对应的 API Key 即可。
@@ -221,6 +233,38 @@ for chunk in response:
     print(chunk.choices[0].delta.content or "", end="")
 ```
 
+### Open WebUI 集成使用
+
+当与 Open WebUI 集成时，系统会自动处理会话和用户标识：
+
+```python
+import requests
+
+# Open WebUI 会自动发送这些头部信息
+headers = {
+    "Content-Type": "application/json",
+    "x-openwebui-chat-id": "92dd6958-0876-4f21-8fe9-f8b7ad52549c",  # 会话ID
+    "x-openwebui-user-id": "85134a10-4168-4742-8924-88925c1761d2"   # 用户ID
+}
+
+data = {
+    "model": "claude-3-5-sonnet-v2",
+    "messages": [
+        {"role": "user", "content": "续写上次的对话"}
+    ],
+    "stream": True
+}
+
+response = requests.post("http://127.0.0.1:5000/v1/chat/completions", 
+                        headers=headers, json=data, stream=True)
+```
+
+**自动处理机制**：
+- 🔗 **会话映射**: 自动建立 Chat ID ↔ Conversation ID 映射关系
+- 👤 **用户标识**: 用户ID自动添加 `open_webui_` 前缀传递给Dify
+- 💾 **持久化存储**: 会话映射关系保存在SQLite数据库中
+- 🔄 **上下文连续**: 同一Chat ID的对话保持完整的上下文记忆
+
 ## 特性说明
 
 ### 流式输出优化
@@ -229,17 +273,26 @@ for chunk in response:
 - 动态延迟计算
 - 平滑的输出体验
 
+### 会话记忆架构
+
+- **分布式存储**: SQLite数据库替代内存存储，支持多进程访问
+- **自动映射管理**: 透明处理Open WebUI Chat ID到Dify Conversation ID的转换
+- **用户隔离**: 基于用户ID的会话隔离，确保数据安全
+- **故障恢复**: 数据库备份和迁移机制，支持数据结构升级
+
 ### 错误处理
 
 - 完整的错误捕获和处理
 - 详细的日志记录
 - 友好的错误提示
+- 数据库连接重试机制
 
 ### 配置灵活性
 
 - 支持动态添加新模型
 - 支持 JSON 格式配置
 - 支持自定义模型名称
+- 多种用户标识头部格式支持
 
 ## 📚 详细文档
 
@@ -283,7 +336,7 @@ OpenDify/
 │   ├── manual_test.py      # 手动交互测试
 │   └── test_conversation_mapping.py # 会话映射测试
 └── data/                    # 💾 数据存储
-    └── conversation_mappings.json # 会话映射持久化
+    └── conversation_mappings.db # SQLite会话映射数据库
 ```
 
 ## 🧪 测试
