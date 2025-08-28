@@ -2,8 +2,6 @@
 
 OpenDify 是一个将 Dify API 转换为 OpenAI API 格式的代理服务器。它允许使用 OpenAI API 客户端直接与 Dify 服务进行交互。
 
-> 🌟 本项目完全由 Cursor + Claude-3.5 自动生成，未手动编写任何代码（包括此Readme），向 AI 辅助编程的未来致敬！
-
 ## 功能特点
 
 - 完整支持 OpenAI API 格式转换为 Dify API
@@ -279,6 +277,80 @@ response = requests.post("http://127.0.0.1:5000/v1/chat/completions",
 - **自动映射管理**: 透明处理Open WebUI Chat ID到Dify Conversation ID的转换
 - **用户隔离**: 基于用户ID的会话隔离，确保数据安全
 - **故障恢复**: 数据库备份和迁移机制，支持数据结构升级
+
+## 数据库
+
+本项目使用 SQLite 作为持久化存储，会话映射数据默认保存在 `data/conversation_mappings.db`。
+
+### 存储位置
+
+- 默认路径：`data/conversation_mappings.db`
+- Docker 部署：通过 `docker-compose.yml` 将宿主机 `./data` 目录挂载到容器 `/app/data`
+
+### 表结构
+
+表：`conversation_mappings`
+
+- `webui_chat_id` TEXT PRIMARY KEY
+- `dify_conversation_id` TEXT NOT NULL
+- `created_at` INTEGER NOT NULL  (Unix 时间戳，秒)
+- `last_used` INTEGER NOT NULL   (Unix 时间戳，秒)
+- `updated_at` INTEGER DEFAULT (strftime('%s','now'))
+
+> 初始化逻辑会自动创建表与索引，并在列缺失时进行备份-重建-迁移，详见 `conversation_mapper_sqlite.py`。
+
+已创建的索引：
+
+- `idx_last_used` on `last_used`
+- `idx_created_at` on `created_at`
+
+### 并发与性能
+
+- 连接参数：`timeout=60s`、`check_same_thread=False`
+- PRAGMA 设置：
+  - `journal_mode=WAL`（提升并发读写性能）
+  - `foreign_keys=ON`
+  - `busy_timeout=60000`（毫秒）
+  - `synchronous=NORMAL`（性能与可靠性权衡）
+
+### 备份与迁移
+
+- 快速备份：
+
+```bash
+cp data/conversation_mappings.db data/conversation_mappings.db.bak-$(date +%Y%m%d%H%M%S)
+```
+
+- 从 JSON 迁移到 SQLite（可选工具，见脚本文档）：
+
+```bash
+python migrate_to_sqlite.py                 # 使用默认路径
+python migrate_to_sqlite.py data/old.json data/new_mappings.db
+```
+
+- 导出/检查：
+
+```bash
+sqlite3 data/conversation_mappings.db ".schema conversation_mappings"
+sqlite3 data/conversation_mappings.db "SELECT COUNT(*) FROM conversation_mappings;"
+```
+
+### 维护与优化
+
+运行时可调用内部方法完成清理和优化（由服务在合适时机触发）：
+
+- 清理过期映射：按天数阈值删除陈旧记录
+- 数据库优化：`ANALYZE`、`PRAGMA wal_checkpoint(TRUNCATE)`
+
+### Docker 与持久化
+
+- `docker-compose.yml` 已将 `./data` 映射到容器 `/app/data`，确保数据库持久化
+- 升级镜像不影响宿主机数据目录
+
+### 常见问题
+
+- 数据库被锁（database is locked）：服务已内置指数退避与较长超时，若仍频繁出现，建议检查磁盘 I/O、并发规模与宿主机资源；必要时停止高并发写入后再操作
+- 文件权限：确保运行用户对 `data/` 目录有读写权限
 
 ### 错误处理
 
